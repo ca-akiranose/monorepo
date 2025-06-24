@@ -1,0 +1,78 @@
+services:
+  # MySQL データベース
+  mysql:
+    image: mysql:8.0
+    container_name: monorepo-mysql
+    environment:
+      MYSQL_DATABASE: monorepo_dev
+      MYSQL_USER: root
+      MYSQL_PASSWORD: password
+      MYSQL_ROOT_PASSWORD: password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./packages/database/ddl:/docker-entrypoint-initdb.d
+    command: --default-authentication-plugin=mysql_native_password
+    networks:
+      - monorepo-network
+
+  # フロントエンド (React + Vite)
+  frontend:
+    build:
+      context: ./apps/frontend
+      dockerfile: Dockerfile
+    container_name: monorepo-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./apps/frontend:/app
+      - /app/node_modules
+    depends_on:
+      - internal-api
+      - external-api
+    networks:
+      - monorepo-network
+
+  # 内部向けAPI (FastAPI)
+  internal-api:
+    build:
+      context: ./apps/internal-api
+      dockerfile: Dockerfile
+    container_name: monorepo-internal-api
+    ports:
+      - "3001:3001"
+    environment:
+      - DATABASE_URL=mysql+pymysql://root:password@mysql:3306/monorepo_dev
+    volumes:
+      - ./apps/internal-api:/app
+    depends_on:
+      - mysql
+    networks:
+      - monorepo-network
+
+  # 外部向けAPI (FastAPI)
+  external-api:
+    build:
+      context: ./apps/external-api
+      dockerfile: Dockerfile
+    container_name: monorepo-external-api
+    ports:
+      - "3002:3002"
+    environment:
+      - DATABASE_URL=mysql+pymysql://root:password@mysql:3306/monorepo_dev
+    volumes:
+      - ./apps/external-api:/app
+    depends_on:
+      - mysql
+    networks:
+      - monorepo-network
+
+volumes:
+  mysql_data:
+
+networks:
+  monorepo-network:
+    driver: bridge 
